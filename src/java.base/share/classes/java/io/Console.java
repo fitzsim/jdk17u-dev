@@ -25,6 +25,7 @@
 
 package java.io;
 
+import java.lang.annotation.Native;
 import java.util.*;
 import java.nio.charset.Charset;
 import jdk.internal.access.JavaIOAccess;
@@ -361,6 +362,12 @@ public final class Console implements Flushable
     private final Object writeLock;
     private final Reader reader;
     private final PrintWriter printWriter;
+    @Native static final int TTY_STDIN_MASK = 0x00000001;
+    @Native static final int TTY_STDOUT_MASK = 0x00000002;
+    @Native static final int TTY_STDERR_MASK = 0x00000004;
+    // ttyStatus() returns bit patterns above, a bit is set if the corresponding file
+    // descriptor is a character device
+    private static final int ttyStatus = ttyStatus();
     private static native String encoding();
 
     private static final Charset CHARSET;
@@ -380,7 +387,7 @@ public final class Console implements Flushable
         // Set up JavaIOAccess in SharedSecrets
         SharedSecrets.setJavaIOAccess(new JavaIOAccess() {
             public Console console() {
-                if (istty()) {
+                if (isStdinTty() && isStdoutTty()) {
                     if (cons == null)
                         cons = new Console();
                     return cons;
@@ -391,10 +398,22 @@ public final class Console implements Flushable
             public Charset charset() {
                 return CHARSET;
             }
+            public boolean isStdinTty() {
+                return Console.isStdinTty();
+            }
         });
     }
     private static Console cons;
-    private static native boolean istty();
+    private static boolean isStdinTty() {
+        return (ttyStatus & TTY_STDIN_MASK) != 0;
+    }
+    private static boolean isStdoutTty() {
+        return (ttyStatus & TTY_STDOUT_MASK) != 0;
+    }
+    private static boolean isStderrTty() {
+        return (ttyStatus & TTY_STDERR_MASK) != 0;
+    }
+    private static native int ttyStatus();
     private Console() {
         this.delegate = new JdkConsoleImpl(CHARSET);
         readLock = new Object();
